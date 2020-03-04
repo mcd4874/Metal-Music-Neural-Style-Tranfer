@@ -18,6 +18,8 @@ import tensorboardX
 import shutil
 import numpy as np
 
+import time
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, default='configs/edges2handbags_folder', help='Path to the config file.')
 parser.add_argument('--output_path', type=str, default='.', help="outputs path")
@@ -33,7 +35,7 @@ display_size = config['display_size']
 
 # Setup model and data loader
 trainer = MUNIT_Trainer(config)
-# trainer.cuda()
+#trainer.cuda()
 train_loader_a, train_loader_b, test_loader_a, test_loader_b, dataset_a, dataset_b = get_all_data_loaders(config)
 
 if config['dis']['gan_type'] == 'ralsgan':
@@ -64,6 +66,11 @@ shutil.copy(opts.config, os.path.join(output_directory, 'config.yaml')) # copy c
 
 # Start training
 iterations = trainer.resume(checkpoint_directory, hyperparameters=config) if opts.resume else 0
+
+
+start_time = time.time()
+start_time_iter = time.time()
+
 while True:
     for it, (data_a, data_b) in enumerate(zip(train_loader_a, train_loader_b)): # to iterate along both lists
         trainer.update_learning_rate()
@@ -74,7 +81,7 @@ while True:
 
 
         # Main training code
-        trainer.dis_update(images_a, images_b, config)        
+        trainer.dis_update(images_a, images_b, config)
         if config['dis']['gan_type'] == 'ralsgan':
             images_rand_a = random_sample_a.__next__()
             images_rand_b = random_sample_b.__next__()
@@ -115,6 +122,10 @@ while True:
             trainer.save(checkpoint_directory, iterations)
 
         iterations += 1
+        print("Iterations = "+str(iterations))
+        print("Time for this iteration = "+str(time.time()-start_time_iter))
+        start_time_iter = time.time()
         if iterations >= max_iter:
+            print("\n\nTotal time = "+str(time.time()-start_time))
             sys.exit('Finish training')
 

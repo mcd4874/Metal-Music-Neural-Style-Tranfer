@@ -65,6 +65,20 @@ def cal_num_channels(config):
 
     return n_ch * n_res, win_lens
 
+def split_path(path):
+    folders = []
+    while 1:
+        path, folder = os.path.split(path)
+
+        if folder != "":
+            folders.append(folder)
+        else:
+            if path != "":
+                folders.append(path)
+
+            break
+    folders.reverse()
+    return folders
 
 def audio2npys(input_file, config, fname):
     # read an audio file and then write a lot of numpy files
@@ -152,7 +166,7 @@ def do(d):
         else:
             path = os.path.join(d, filename)
             if filename.split(".")[-1].lower() == "wav":
-                fname = "".join("_".join(path.split("/"))[len(inpath) + 1:].split(".")[:-1])
+                fname = "".join("_".join(split_path(path))[len(inpath) + 1:].split(".")[:-1])
                 print("Processing " + fname)
                 audio2npys(path, config, fname)
 # audio2npys("test_audio/09. Panzerkampf.wav", config)

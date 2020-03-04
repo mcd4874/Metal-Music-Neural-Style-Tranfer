@@ -2,8 +2,6 @@
 Copyright (C) 2018 NVIDIA Corporation.  All rights reserved.
 Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode).
 """
-import torchfile
-# from torch.utils.serialization import load_lua
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from torch.optim import lr_scheduler
@@ -49,7 +47,7 @@ def get_all_data_loaders(conf):
         new_size_b = conf['new_size_b']
     height = conf['crop_image_height']
     width = conf['crop_image_width']
-    
+
     train_loader_a, dataset_a = get_data_loader_folder(os.path.join(conf['data_root'], 'trainA'), batch_size, True,
                                           new_size_a, height, width, num_workers, True, conf)
     test_loader_a, _ = get_data_loader_folder(os.path.join(conf['data_root'], 'testA'), batch_size, False,
@@ -82,7 +80,7 @@ def get_test_data_loaders(conf, input_path, a2b):
     if a2b == 1:
         test_loader, _ = get_data_loader_folder(os.path.join(input_path, 'testA'), batch_size, False,
                                              new_size_a, new_size_a, new_size_a, num_workers, True, conf)
-    else:    
+    else:
         test_loader, _ = get_data_loader_folder(os.path.join(input_path, 'testB'), batch_size, False,
                                              new_size_b, new_size_b, new_size_b, num_workers, True, conf)
     return test_loader
@@ -105,7 +103,7 @@ def get_data_loader_folder(input_folder, batch_size, train, new_size=None,
     transform_list = [transforms.Lambda(lambda x: __RandomCropNumpy(x, (height, width)))] + transform_list
     transform = transforms.Compose(transform_list)
     dataset = ImageFolder(input_folder, transform=transform)
-    loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=train, drop_last=True, num_workers=num_workers)
+    loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=train, drop_last=True, num_workers=0)
     return loader, dataset
 
 
