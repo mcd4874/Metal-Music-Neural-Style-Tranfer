@@ -35,7 +35,7 @@ display_size = config['display_size']
 
 # Setup model and data loader
 trainer = MUNIT_Trainer(config)
-#trainer.cuda()
+trainer.cuda()
 train_loader_a, train_loader_b, test_loader_a, test_loader_b, dataset_a, dataset_b = get_all_data_loaders(config)
 
 if config['dis']['gan_type'] == 'ralsgan':
@@ -47,15 +47,15 @@ train_display_data_b = torch.stack([train_loader_b.dataset[i].clone() for i in r
 test_display_data_a = torch.stack([test_loader_a.dataset[i].clone() for i in range(display_size)])
 test_display_data_b = torch.stack([test_loader_b.dataset[i].clone() for i in range(display_size)])
 
-# train_display_images_a = train_display_data_a.cuda()
-# train_display_images_b = train_display_data_b.cuda()
-# test_display_images_a = test_display_data_a.cuda()
-# test_display_images_b = test_display_data_b.cuda()
+train_display_images_a = train_display_data_a.cuda()
+train_display_images_b = train_display_data_b.cuda()
+test_display_images_a = test_display_data_a.cuda()
+test_display_images_b = test_display_data_b.cuda()
 
-train_display_images_a = train_display_data_a
-train_display_images_b = train_display_data_b
-test_display_images_a = test_display_data_a
-test_display_images_b = test_display_data_b
+#train_display_images_a = train_display_data_a
+#train_display_images_b = train_display_data_b
+#test_display_images_a = test_display_data_a
+#test_display_images_b = test_display_data_b
 
 # Setup logger and output folders
 model_name = os.path.splitext(os.path.basename(opts.config))[0]
@@ -76,8 +76,8 @@ while True:
         trainer.update_learning_rate()
         images_a = data_a
         images_b = data_b
-        # images_a, images_b = images_a.cuda().detach(), images_b.cuda().detach()
-        images_a, images_b = images_a.detach(), images_b.detach()
+        images_a, images_b = images_a.cuda().detach(), images_b.cuda().detach()
+        #images_a, images_b = images_a.detach(), images_b.detach()
 
 
         # Main training code
@@ -85,13 +85,13 @@ while True:
         if config['dis']['gan_type'] == 'ralsgan':
             images_rand_a = random_sample_a.__next__()
             images_rand_b = random_sample_b.__next__()
-            # images_rand_a, images_rand_b = Variable(images_rand_a.cuda()), Variable(images_rand_b.cuda())
-            images_rand_a, images_rand_b = Variable(images_rand_a), Variable(images_rand_b)
+            images_rand_a, images_rand_b = Variable(images_rand_a.cuda()), Variable(images_rand_b.cuda())
+            #images_rand_a, images_rand_b = Variable(images_rand_a), Variable(images_rand_b)
 
             trainer.gen_update(images_a, images_b, config, images_rand_a, images_rand_b)
         else:
             trainer.gen_update(images_a, images_b, config)
-        # torch.cuda.synchronize()
+        torch.cuda.synchronize()
 
         trainer.update_iter()
 
