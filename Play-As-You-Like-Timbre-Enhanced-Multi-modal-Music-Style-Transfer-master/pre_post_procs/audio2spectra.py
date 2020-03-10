@@ -35,10 +35,10 @@ config = {
     # to decide number of channels
     'use_phase': False,  # only True without mel
     'is_multi': False,  # if true, there would be three resolutions
-    'use_ceps': False,
-    'use_d_spec': False,
+    'use_ceps': True,
+    'use_d_spec': True,
     'd_spec_type': 'attack',  # mode: all, decay, or attack
-    'use_spec_enve': False,
+    'use_spec_enve': True,
 
     'num_digit': 4
 }
@@ -146,19 +146,18 @@ def audio2npys(input_file, config, fname):
 '''
 locate the input directory & read the files
 '''
-inpath = 'test_audio'
-instrument = 'guitar'
-prefix = '_c2h256w302'  # naming follows the settings in config
+inpath = 'Sabaton_wav'
+prefix = '_c2h256w302_metal'  # naming follows the settings in config
 
 specpath = prefix + '/npy' + '/'
 imgpath = prefix + '/img' + '/'
 mkdir(specpath)
 mkdir(imgpath)
 
-input_dir = inpath + instrument + '/'
-print('from {0}'.format(input_dir))
 
+import time
 
+start_time_1 = time.time()
 def do(d):
     for filename in os.listdir(d):
         if os.path.isdir(os.path.join(d, filename)):
@@ -166,8 +165,13 @@ def do(d):
         else:
             path = os.path.join(d, filename)
             if filename.split(".")[-1].lower() == "wav":
+                start_time = time.time()
                 fname = "".join("_".join(split_path(path))[len(inpath) + 1:].split(".")[:-1])
                 print("Processing " + fname)
                 audio2npys(path, config, fname)
+                print("Time taken for "+filename+" = "+str(time.time()-start_time))
+
 # audio2npys("test_audio/09. Panzerkampf.wav", config)
 do(inpath)
+
+print("Total time taken = "+str(time.time() - start_time_1))

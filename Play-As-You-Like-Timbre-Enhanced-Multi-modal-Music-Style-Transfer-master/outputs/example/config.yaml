@@ -5,7 +5,7 @@
 image_save_iter: 10000        # How often do you want to save output images during training
 image_display_iter: 5000      # How often do you want to display output images during training
 display_size: 4               # How many images do you want to display each time
-snapshot_save_iter: 10000     # How often do you want to save trained models
+snapshot_save_iter: 20     # How often do you want to save trained models
 log_iter: 1                   # How often do you want to log the training stats
 
 # optimization options
@@ -65,4 +65,4 @@ use_ceps: True                # True or False, only effect num_channels
 use_diff_spec: True           # True or False, only effect num_channels
 use_spec_enve: True           # True or False, only effect num_channels
 
-data_root: ./dataset/pia2vio_example/     # dataset folder location
+data_root: ./dataset2/pia2vio_example/     # dataset folder location
