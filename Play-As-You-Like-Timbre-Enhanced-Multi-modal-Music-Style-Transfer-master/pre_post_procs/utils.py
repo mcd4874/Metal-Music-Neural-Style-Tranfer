@@ -173,8 +173,14 @@ def spectrum2magnitude(spec, config):
     pwr = np.zeros((1+config['fft_size']//2, num_frames))
     for i in range(num_frames):
         # reverse column by column
-        ret = nnls(melfb, mel_pwr[:,i])
+        #print("############################################")
+        #print("### "+str(np.isnan(melfb).any())+"; "+str(np.isinf(melfb).any()))
+        #print("### "+str(np.isnan(mel_pwr[:,i]).any())+"; "+str(np.isinf(mel_pwr[:,i]).any()))
+        melfb_no_nan = np.nan_to_num(melfb)
+        mel_pwr_right = np.nan_to_num(mel_pwr[:,i])
+        ret = nnls(melfb_no_nan, mel_pwr_right)
         pwr[:,i] = ret[0]
+    print("done nnls")
     # finally, get estimated magnitude
     mag = pwr**(0.5)
     return mag

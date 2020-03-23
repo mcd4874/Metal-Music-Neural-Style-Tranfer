@@ -46,6 +46,7 @@ torch.manual_seed(opts.seed)
 torch.cuda.manual_seed(opts.seed)
 
 # Load experiment setting
+print(opts.config)
 config = get_config(opts.config)
 opts.num_style = 1 if opts.style != '' else opts.num_style
 
@@ -118,6 +119,7 @@ for it, (data) in enumerate(test_loader):
                 npy_name = a2b_directory + '/piece'+str(it).zfill(4) + '_style_' + str(j).zfill(2)
             else:
                 npy_name = b2a_directory + '/piece'+str(it).zfill(4) + '_style_' + str(j).zfill(2)
+            print("Saving to "+npy_name)
             np.save(npy_name, x)
 
 ed = time.time()

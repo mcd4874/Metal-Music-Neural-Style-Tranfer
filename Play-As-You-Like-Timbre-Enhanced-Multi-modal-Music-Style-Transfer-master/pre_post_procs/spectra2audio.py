@@ -21,7 +21,7 @@ D_phase = None # without phase information, the util will do phase estimation
 
 ### directory & file names
 gen_dir = './generated_features'
-ver_id = 'gen_piano2guitar'
+ver_id = 'song1'
 
 spectra_dir = gen_dir + '/' + ver_id + '/'
 print('spectra_dir = ', spectra_dir)
@@ -32,11 +32,48 @@ is_overwrite = True # reconstructing costs a lots of time, only run it if necess
 
 config_name = gen_dir + '/' + ver_id + '_config.yaml'
 print("config_name = {}".format(config_name))
-config = get_config(config_name)
+
+#config = get_config(config_name)
+### settings
+config = {
+    # basic parameters
+    'sr': 22050,
+    'fft_size': 2048,
+    'hop_length': 256,
+    'input_type': 'exp',  # power, dB with ref_dB, p_log, exp with exp_b. it's input of training data
+    'is_mel': True,
+
+    # for spectra
+    'n_mels': 256,
+    'exp_b': 0.3,
+    'ref_dB': 1e-5,
+
+    # for cepstrum
+    'dct_type': 2,
+    'norm': 'ortho',
+
+    # for slicing and overlapping
+    'audio_samples_frame_size': 77175,  # 3.5sec * sr
+    'audio_samples_hop_length': 77175,
+    'output_hei': 256,
+    'output_wid': 302,  # num_output_frames = 1 + (77175/hop_length256)
+
+    # to decide number of channels
+    'use_phase': False,  # only True without mel
+    'is_multi': False,  # if true, there would be three resolutions
+    'use_ceps': True,
+    'use_d_spec': True,
+    'd_spec_type': 'attack',  # mode: all, decay, or attack
+    'use_spec_enve': True,
+
+    'num_digit': 4
+}
+
 outdir = 'generated_audios' + '/' + ver_id + '/'
 print("out_dir = {}".format(outdir))
 mkdir(outdir)
 
+source_wav = None ###
 if source_wav is not None:
     print('phase information is from {}'.format(source_wav))
     y, sr = read_via_scipy(source_wav)
@@ -46,25 +83,27 @@ if source_wav is not None:
     # extract the phase information
     D_mag, D_phase = librosa.magphase(librosa.stft(y, n_fft=config['fft_size'], hop_length=config['hop_length']))
 
-for style in range(num_styles):
-    suffix_file_name = '*'+'_style_'+str(style).zfill(2)+'.npy'
-    glob_files = spectra_dir + suffix_file_name
+for style in range(1):
+    #suffix_file_name = '*'+'_style_'+str(style).zfill(2)+'.npy'
+    #glob_files = spectra_dir #+ suffix_file_name
     # gen_dir + ver_id + 'piece0000_style_00.npy'
-    files = sorted(glob.glob(glob_files))
-    num_files = len(files)
-    print('{}: contains {} files'.format(glob_files, len(files)))
-    if num_files==0:
-        continue
-    if num_pieces == None: # then process all spectra
-        num_pieces = num_files
+    #files = sorted(glob.glob(glob_files))
+    #num_files = len(files)
+    #print('{}: contains {} files'.format(glob_files, len(files)))
+    #if num_files==0:
+    #    continue
+    #if num_pieces == None: # then process all spectra
+    #    num_pieces = num_files
+
+    num_pieces = len(os.listdir(spectra_dir))
     
     ret = np.zeros((hei, wid*num_pieces), dtype='float32') # concatenate the spectra
     cnt = 0
-    for file in files:
+    for file in os.listdir(spectra_dir):
         if cnt>=num_pieces:
             break
         
-        x = np.load(file) # x.dtype = 'float32'
+        x = np.load(os.path.join(spectra_dir, file)) # x.dtype = 'float32'
         if len(x.shape)==3:
             # in latest codes,  x.shape should be [num_ch, 256. 256]
             ret[:,cnt*256:(cnt+1)*256] = x[0] # only use spectrogram

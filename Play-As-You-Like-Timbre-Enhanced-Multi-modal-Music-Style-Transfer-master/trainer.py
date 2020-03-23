@@ -27,11 +27,11 @@ class MUNIT_Trainer(nn.Module):
         self.style_dim = hyperparameters['gen']['style_dim']
 
         # fix the noise used in sampling
-        # self.s_a = torch.randn(8, self.style_dim, 1, 1).cuda()
-        # self.s_b = torch.randn(8, self.style_dim, 1, 1).cuda()
+        self.s_a = torch.randn(8, self.style_dim, 1, 1).cuda()
+        self.s_b = torch.randn(8, self.style_dim, 1, 1).cuda()
 
-        self.s_a = torch.randn(8, self.style_dim, 1, 1)
-        self.s_b = torch.randn(8, self.style_dim, 1, 1)
+        #self.s_a = torch.randn(8, self.style_dim, 1, 1)
+        #self.s_b = torch.randn(8, self.style_dim, 1, 1)
 
         # Setup the optimizers
         beta1 = hyperparameters['beta1']
@@ -59,8 +59,8 @@ class MUNIT_Trainer(nn.Module):
         return torch.mean(torch.abs(input - target))
 
     def volumeloss_criterion(self, input, target):
-        # idx_select =  torch.tensor([0]).cuda()
-        idx_select =  torch.tensor([0])
+        idx_select =  torch.tensor([0]).cuda()
+        #idx_select =  torch.tensor([0])
         input, target = input.index_select(1, idx_select), target.index_select(1, idx_select)
         input, target = torch.mean(input, 3), torch.mean(target, 3)
         input, target = torch.mean(input, 2), torch.mean(target, 2)
@@ -83,11 +83,11 @@ class MUNIT_Trainer(nn.Module):
 
     def gen_update(self, x_a, x_b, hyperparameters, x_a_rand=None, x_b_rand=None):
         self.gen_opt.zero_grad()
-        # s_a = Variable(torch.randn(x_a.size(0), self.style_dim, 1, 1).cuda())
-        # s_b = Variable(torch.randn(x_b.size(0), self.style_dim, 1, 1).cuda())
+        s_a = Variable(torch.randn(x_a.size(0), self.style_dim, 1, 1).cuda())
+        s_b = Variable(torch.randn(x_b.size(0), self.style_dim, 1, 1).cuda())
 
-        s_a = Variable(torch.randn(x_a.size(0), self.style_dim, 1, 1))
-        s_b = Variable(torch.randn(x_b.size(0), self.style_dim, 1, 1))
+        #s_a = Variable(torch.randn(x_a.size(0), self.style_dim, 1, 1))
+        #s_b = Variable(torch.randn(x_b.size(0), self.style_dim, 1, 1))
         # encode
         c_a, s_a_prime = self.gen_a.encode(x_a)
         c_b, s_b_prime = self.gen_b.encode(x_b)
@@ -155,24 +155,24 @@ class MUNIT_Trainer(nn.Module):
         self.gen_opt.step()
 
     def calc_cepstrum_loss(self, x_fake):
-        # idx_select_spec = torch.tensor([0]).cuda()
-        # idx_select_ceps = torch.tensor([1]).cuda()
+        idx_select_spec = torch.tensor([0]).cuda()
+        idx_select_ceps = torch.tensor([1]).cuda()
 
-        idx_select_spec = torch.tensor([0])
-        idx_select_ceps = torch.tensor([1])
+        #idx_select_spec = torch.tensor([0])
+        #idx_select_ceps = torch.tensor([1])
 
         fake_spec = x_fake.index_select(1, idx_select_spec).detach().cpu().numpy()
         ceps = scipy.fftpack.dct(fake_spec, axis=2, type=2, norm='ortho')
         ceps = np.maximum(ceps, 0)        
-        # return self.intrinsic_criterion(x_fake.index_select(1, idx_select_ceps), torch.from_numpy(ceps).cuda())
-        return self.intrinsic_criterion(x_fake.index_select(1, idx_select_ceps), torch.from_numpy(ceps))
+        return self.intrinsic_criterion(x_fake.index_select(1, idx_select_ceps), torch.from_numpy(ceps).cuda())
+        #return self.intrinsic_criterion(x_fake.index_select(1, idx_select_ceps), torch.from_numpy(ceps))
 
 
     def calc_spectral_flux_loss(self, x_fake):
-        # idx_select_spec = torch.tensor([0]).cuda()
-        # idx_select_flux = torch.tensor([2]).cuda()
-        idx_select_spec = torch.tensor([0])
-        idx_select_flux = torch.tensor([2])
+        idx_select_spec = torch.tensor([0]).cuda()
+        idx_select_flux = torch.tensor([2]).cuda()
+        #idx_select_spec = torch.tensor([0])
+        #idx_select_flux = torch.tensor([2])
 
 
         fake_spec = x_fake.index_select(1, idx_select_spec).detach().cpu().numpy()
@@ -182,24 +182,24 @@ class MUNIT_Trainer(nn.Module):
             spec_flux[:,:,:,i] = np.maximum(fake_spec[:,:,:,i+1]-fake_spec[:,:,:,i-1], 0.0)
         spec_flux[:,:,:,0] = spec_flux[:,:,:,1]
         spec_flux[:,:,:,-1] = spec_flux[:,:,:,-2]
-        # return self.intrinsic_criterion(x_fake.index_select(1, idx_select_flux), torch.from_numpy(spec_flux).cuda())
-        return self.intrinsic_criterion(x_fake.index_select(1, idx_select_flux), torch.from_numpy(spec_flux))
+        return self.intrinsic_criterion(x_fake.index_select(1, idx_select_flux), torch.from_numpy(spec_flux).cuda())
+        #return self.intrinsic_criterion(x_fake.index_select(1, idx_select_flux), torch.from_numpy(spec_flux))
 
 
     def calc_spectral_enve15_loss(self, x_fake):
-        # idx_select_spec = torch.tensor([0]).cuda()
-        # idx_select_enve = torch.tensor([3]).cuda()
+        idx_select_spec = torch.tensor([0]).cuda()
+        idx_select_enve = torch.tensor([3]).cuda()
 
-        idx_select_spec = torch.tensor([0])
-        idx_select_enve = torch.tensor([3])
+        #idx_select_spec = torch.tensor([0])
+        #idx_select_enve = torch.tensor([3])
         
         fake_spec = x_fake.index_select(1, idx_select_spec).detach().cpu().numpy()		
         MFCC = scipy.fftpack.dct(fake_spec, axis=2, type=2, norm='ortho')
         MFCC[:,:,15:,:] = 0.0
         spec_enve = scipy.fftpack.idct(MFCC, axis=2, type=2, norm='ortho')
         spec_enve = np.maximum(spec_enve, 0.0)
-        return self.intrinsic_criterion(x_fake.index_select(1, idx_select_enve), torch.from_numpy(spec_enve))
-        # return self.intrinsic_criterion(x_fake.index_select(1, idx_select_enve), torch.from_numpy(spec_enve).cuda())
+        #return self.intrinsic_criterion(x_fake.index_select(1, idx_select_enve), torch.from_numpy(spec_enve))
+        return self.intrinsic_criterion(x_fake.index_select(1, idx_select_enve), torch.from_numpy(spec_enve).cuda())
 
 
     def sample(self, x_a, x_b):
@@ -207,11 +207,11 @@ class MUNIT_Trainer(nn.Module):
             self.eval()
             s_a1 = Variable(self.s_a)
             s_b1 = Variable(self.s_b)
-            # s_a2 = Variable(torch.randn(x_a.size(0), self.style_dim, 1, 1).cuda())
-            # s_b2 = Variable(torch.randn(x_b.size(0), self.style_dim, 1, 1).cuda())
+            s_a2 = Variable(torch.randn(x_a.size(0), self.style_dim, 1, 1).cuda())
+            s_b2 = Variable(torch.randn(x_b.size(0), self.style_dim, 1, 1).cuda())
 
-            s_a2 = Variable(torch.randn(x_a.size(0), self.style_dim, 1, 1))
-            s_b2 = Variable(torch.randn(x_b.size(0), self.style_dim, 1, 1))
+            #s_a2 = Variable(torch.randn(x_a.size(0), self.style_dim, 1, 1))
+            #s_b2 = Variable(torch.randn(x_b.size(0), self.style_dim, 1, 1))
             x_a_recon, x_b_recon, x_ba1, x_ba2, x_ab1, x_ab2 = [], [], [], [], [], []
             for i in range(x_a.size(0)):
                 c_a, s_a_fake = self.gen_a.encode(x_a[i].unsqueeze(0))
@@ -230,11 +230,11 @@ class MUNIT_Trainer(nn.Module):
 
     def dis_update(self, x_a, x_b, hyperparameters):
         self.dis_opt.zero_grad()
-        # s_a = Variable(torch.randn(x_a.size(0), self.style_dim, 1, 1).cuda())
-        # s_b = Variable(torch.randn(x_b.size(0), self.style_dim, 1, 1).cuda())
+        s_a = Variable(torch.randn(x_a.size(0), self.style_dim, 1, 1).cuda())
+        s_b = Variable(torch.randn(x_b.size(0), self.style_dim, 1, 1).cuda())
 
-        s_a = Variable(torch.randn(x_a.size(0), self.style_dim, 1, 1))
-        s_b = Variable(torch.randn(x_b.size(0), self.style_dim, 1, 1))
+        #s_a = Variable(torch.randn(x_a.size(0), self.style_dim, 1, 1))
+        #s_b = Variable(torch.randn(x_b.size(0), self.style_dim, 1, 1))
         # encode
         c_a, _ = self.gen_a.encode(x_a)
         c_b, _ = self.gen_b.encode(x_b)
