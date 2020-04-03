@@ -146,8 +146,8 @@ def audio2npys(input_file, config, fname):
 '''
 locate the input directory & read the files
 '''
-inpath = 'Sabaton_wav'
-prefix = '_c2h256w302_metal'  # naming follows the settings in config
+inpath = 'Adele_wav'
+prefix = '_c2h256w302_adele'  # naming follows the settings in config
 
 specpath = prefix + '/npy' + '/'
 imgpath = prefix + '/img' + '/'

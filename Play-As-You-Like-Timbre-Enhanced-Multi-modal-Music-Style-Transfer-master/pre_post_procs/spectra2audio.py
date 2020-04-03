@@ -20,10 +20,11 @@ num_pieces = 5#None # output first k pieces of spectra, each last 3 seconds
 D_phase = None # without phase information, the util will do phase estimation
 
 ### directory & file names
-gen_dir = './generated_features'
+style_id = "02"
+gen_dir = './test_gen_features_'+style_id
 ver_id = 'song1'
 
-spectra_dir = gen_dir + '/' + ver_id + '/'
+spectra_dir = gen_dir + '/' #+ ver_id + '/'
 print('spectra_dir = ', spectra_dir)
 
 source_wav = './raw_audios/raw_audio_piano/' + 'QingTianJayChou.wav'
@@ -69,7 +70,7 @@ config = {
     'num_digit': 4
 }
 
-outdir = 'generated_audios' + '/' + ver_id + '/'
+outdir = 'generated_audios_'+style_id + '/' + ver_id + '/'
 print("out_dir = {}".format(outdir))
 mkdir(outdir)
 
@@ -105,11 +106,13 @@ for style in range(1):
         
         x = np.load(os.path.join(spectra_dir, file)) # x.dtype = 'float32'
         if len(x.shape)==3:
+            print("Using only spectrogram")
             # in latest codes,  x.shape should be [num_ch, 256. 256]
             ret[:,cnt*256:(cnt+1)*256] = x[0] # only use spectrogram
         else:
+            print("Using NOT only spectrogram")
             # x.shape = [256, 256]
-            ret[:,cnt*256:(cnt+1)*256] = x 
+            ret[:,cnt*256:(cnt+1)*256] = x
         cnt += 1
     print('shape of npy file: {}'.format(x.shape))
     if not np.isfinite(ret).all():

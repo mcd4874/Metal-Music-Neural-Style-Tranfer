@@ -171,7 +171,10 @@ def spectrum2magnitude(spec, config):
     melfb = librosa.filters.mel(22050, config['fft_size'], n_mels=config['n_mels']) # shape=(n_mels, 1 + n_fft/2)
     num_frames = mel_pwr.shape[1]
     pwr = np.zeros((1+config['fft_size']//2, num_frames))
+    print("nunm frames = "+str(num_frames))
     for i in range(num_frames):
+        if(i%100 == 0):
+            print(str(i)+"/"+str(num_frames)+" done - "+str(100*i/num_frames)+"%")
         # reverse column by column
         #print("############################################")
         #print("### "+str(np.isnan(melfb).any())+"; "+str(np.isinf(melfb).any()))
