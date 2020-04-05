@@ -7,21 +7,21 @@ import tensorflow as tf
 import numpy as np
 # import config
 from collections import namedtuple
-from module import *
-from utils import *
-from ops import *
+# from module import *
+# from utils import *
+# from ops import *
 # from metrics import *
 import tensorflow_addons as tfa
-from tensorflow import keras.backend as kb
-os.environ["CUDA_VISIBLE_DEVICES"] = os.environ['SGE_GPU']
+import tensorflow.keras.backend as kb
+from tensorflow.keras.optimizers import Adam
+import matplotlib.pyplot as plt
+# os.environ["CUDA_VISIBLE_DEVICES"] = os.environ['SGE_GPU']
 
 
 from tensorflow import keras as keras
 class Generator(object):
-    def __init__(self,input_dim,output_dim,filter_dim):
+    def __init__(self,input_dim):
         self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.filter_dim = filter_dim
         self.model = self.build_model()
 
     def build_model(self,num_res_net_blocks = 10):
@@ -41,23 +41,32 @@ class Generator(object):
         input = keras.Input(shape=(self.input_dim))
         c0 = tf.pad(input, [[0, 0], [3, 3], [3, 3], [0, 0]], "REFLECT")
         # c0 is (# of images * 262 * 262 * 3)
-        # 10 resnet
+
         c1 = keras.layers.Conv2D(filters=64, kernel_size=7, strides=1,activation='relu', padding='VALID')(c0)
         c1 = tfa.layers.InstanceNormalization()(c1)
-        c2 = keras.layers.Conv2D(filters=128, kernel_size=3, strides=2, activation='relu', padding='VALID')(c1)
+        # c1 is (# of images * 256 * 256 * 64)
+
+        c2 = keras.layers.Conv2D(filters=128, kernel_size=3, strides=2, activation='relu', padding ='SAME')(c1)
         c2 = tfa.layers.InstanceNormalization()(c2)
-        c3 = keras.layers.Conv2D(filters=256, kernel_size=3, strides=2, activation='relu', padding='VALID')(c2)
+        # c2 is (# of images * 128 * 128 * 128)
+
+        c3 = keras.layers.Conv2D(filters=256, kernel_size=3, strides=2, activation='relu',padding ='SAME')(c2)
         c3 = tfa.layers.InstanceNormalization()(c3)
+        # c3 is (# of images * 64 * 64 * 256)
+
         res = None
+        # 10 resnet
         for i in range(num_res_net_blocks):
             res = residue_block(c3, 256, 3)
 
         #3 deconv
-        d1 = keras.layers.Conv2DTranspose(filters=128, kernel_size=3, strides=2,activation='relu')(res)
+        d1 = keras.layers.Conv2DTranspose(filters=128, kernel_size=3, strides=2,activation='relu',padding = 'SAME',name = 'g_d1')(res)
         d1 = tfa.layers.InstanceNormalization()(d1)
-        d2 = keras.layers.Conv2DTranspose(filters=64, kernel_size=3, strides=2, activation='relu')(d1)
+        d2 = keras.layers.Conv2DTranspose(filters=64, kernel_size=3, strides=2, activation='relu',padding = 'SAME',name = 'g_d2')(d1)
         d2 = tfa.layers.InstanceNormalization()(d2)
-        output = keras.layers.Conv2DTranspose(filters=1, kernel_size=7, strides=1, activation='sigmoid',padding='VALID')(d2)
+
+        d3 = tf.pad(d2, [[0, 0], [3, 3], [3, 3], [0, 0]], "REFLECT",name = 'g_d3')
+        output = keras.layers.Conv2D(filters=1, kernel_size=7, strides=1, activation='sigmoid')(d3)
         model = keras.Model(input,output)
         model.summary()
 
@@ -68,21 +77,22 @@ class Generator(object):
 
     def save(self,path):
         self.model.save(path)
-    # def train(self):
-    #
-    def predict(self,input_data):
+
+    def train_on_batch(self, X, y):
+        return self.model.train_on_batch(X, y)
+    def translate_domain(self,input_data):
         return self.model.predict(input_data)
 
 class Discriminator(object):
-    def __init__(self,input_dim,output_dim):
+    def __init__(self,input_dim):
         self.input_dim = input_dim
         self.model = self.build_model()
 
     def build_model(self):
         model = keras.Sequential()
-        model.add(keras.layers.Conv2D(filters=64, kernel_size=4, strides=2,input_shape=(self.input_dim[0], self.input_dim[1], 1)))
+        model.add(keras.layers.Conv2D(filters=64, kernel_size=4, strides=2,padding = 'SAME',input_shape=self.input_dim))
         model.add(keras.layers.LeakyReLU(alpha=0.3))
-        model.add(keras.layers.Conv2D(filters=256, kernel_size=4, strides=2))
+        model.add(keras.layers.Conv2D(filters=256, kernel_size=4, strides=2,padding = 'SAME'))
         model.add(keras.layers.LeakyReLU(alpha=0.3))
         model.add(tfa.layers.InstanceNormalization())
         model.add(keras.layers.Conv2D(filters=1, kernel_size=1, strides=1))
@@ -99,16 +109,19 @@ class Discriminator(object):
     def predict(self,input_data):
         return self.model.predict(input_data)
 
+    def train_on_batch(self,X,y):
+        return self.model.train_on_batch(X,y)
 
 
-class cyclegan(object):
-    def __init__(self, sess, batch_size, crop_size, input_channels, output_channels ,generatorAtoB,generatorBtoA, discriminatorA,discriminatorB, discriminatorAandM,discriminatorBandM,
-                 generator_weight_factor = 10,discriminator_weight_factor = 10, use_D_M = True):
+
+class CycleGan(object):
+    def __init__(self, sess, batch_size, crop_size,generatorAtoB,generatorBtoA, discriminatorA,discriminatorB, discriminatorAandM = None,discriminatorBandM = None,
+                 generator_weight_factor = 10,discriminator_weight_factor = 10, use_D_M = False, gamma = 0.9,lamda = 0.9):
         self.sess = sess
         self.batch_size = batch_size
         self.image_size = crop_size  # cropped size
-        self.input_c_dim = input_channels  # number of input image channels
-        self.output_c_dim = output_channels  # number of output image channels
+        # self.input_c_dim = input_channels  # number of input image channels
+        # self.output_c_dim = output_channels  # number of output image channels
         self.generatorAToB = generatorAtoB
         self.generatorBToA = generatorBtoA
         self.discriminatorA = discriminatorA
@@ -116,6 +129,10 @@ class cyclegan(object):
         self.use_D_M = use_D_M
         self.discriminatorAandM = discriminatorAandM
         self.discriminatorBandM = discriminatorBandM
+        self.gamma = gamma
+        self.lamda = lamda
+
+
         self.composite_model_A = self.build_composite_generator_network(self.generatorAToB,self.generatorBToA,self.discriminatorA)
         self.composite_model_B = self.build_composite_generator_network(self.generatorBToA,self.generatorAToB,self.discriminatorB)
 
@@ -133,15 +150,15 @@ class cyclegan(object):
         input_real_B = keras.Input(shape=self.image_size)
 
         # discriminator element
-        fake_B = generatorAtoB(input_real_A)
-        dis_B = discriminatorB(fake_B)
+        fake_B = generatorAtoB.model(input_real_A)
+        dis_B = discriminatorB.model(fake_B)
 
         #compare A vs Fake A through A->B->A
-        fake_A_ = generatorBtoA(fake_B)
+        fake_A_ = generatorBtoA.model(fake_B)
 
         # compare B vs Fake B through B->A->B
-        fake_A = generatorBtoA(input_real_B)
-        fake_B_ = generatorAtoB(fake_A)
+        fake_A = generatorBtoA.model(input_real_B)
+        fake_B_ = generatorAtoB.model(fake_A)
 
         # define model graph
         model = keras.Model([input_real_A, input_real_B], [dis_B, fake_A_, fake_B_])
@@ -165,27 +182,34 @@ class cyclegan(object):
     # generate a batch of images, returns images and targets
     def generate_fake_samples_batch(self,generator_model, dataset, output_shape):
         # generate fake instance
-        X = generator_model.predict(dataset)
+        X = generator_model.translate_domain(dataset)
         # create 'fake' class labels (0)
         y = np.zeros((len(X), output_shape, output_shape, 1))
         return X, y
 
-    def generate_mix_sample_batch(self):
+    def generate_mix_sample_batch(self,datasetA,datasetB,batch_size,output_shape):
+        ix_A = np.random.randint(0, datasetA.shape[0], batch_size/2)
+        X_A = datasetA[ix_A]
+
+        ix_B = np.random.randint(0, datasetB.shape[0], batch_size /2)
+        X_B = datasetA[ix_B]
+
+        # X =
 
     # save the generator models to file
-    def save_models(self,step, generator_model_AtoB, generator_model_BtoA,path):
+    def save_models(self,epoch, generator_model_AtoB, generator_model_BtoA,path):
         # save the first generator model
-        filename1 = 'g_model_AtoB_%06d.h5' % (step + 1)
+        filename1 = 'g_model_AtoB_%06d.h5' % (epoch)
         filename1 = os.path.join(path,filename1)
         generator_model_AtoB.save(filename1)
         # save the second generator model
-        filename2 = 'g_model_BtoA_%06d.h5' % (step + 1)
+        filename2 = 'g_model_BtoA_%06d.h5' % (epoch)
         filename2 = os.path.join(path, filename2)
         generator_model_BtoA.save(filename2)
         print('>Saved: %s and %s' % (filename1, filename2))
 
     # generate samples and save as a plot and save the model
-    def summarize_performance(self,step, g_model, trainX, name, n_samples=5):
+    def summarize_performance(self,epochs, g_model, trainX, name, n_samples=5):
         # select a sample of input images
         X_in, _ = self.generate_real_samples_batch(trainX, n_samples, 0)
         # generate translated images
@@ -195,18 +219,18 @@ class cyclegan(object):
         X_out = (X_out + 1) / 2.0
         # plot real images
         for i in range(n_samples):
-            pyplot.subplot(2, n_samples, 1 + i)
-            pyplot.axis('off')
-            pyplot.imshow(X_in[i])
+            plt.subplot(2, n_samples, 1 + i)
+            plt.axis('off')
+            plt.imshow(X_in[i])
         # plot translated image
         for i in range(n_samples):
-            pyplot.subplot(2, n_samples, 1 + n_samples + i)
-            pyplot.axis('off')
-            pyplot.imshow(X_out[i])
+            plt.subplot(2, n_samples, 1 + n_samples + i)
+            plt.axis('off')
+            plt.imshow(X_out[i])
         # save plot to file
         filename1 = '%s_generated_plot_%06d.png' % (name, (step + 1))
-        pyplot.savefig(filename1)
-        pyplot.close()
+        plt.savefig(filename1)
+        plt.close()
 
     def update_image_pool(self,pool, images, max_size=50):
         selected = list()
@@ -215,20 +239,20 @@ class cyclegan(object):
                 # stock the pool
                 pool.append(image)
                 selected.append(image)
-            elif random() < 0.5:
+            elif np.random.rand() < 0.5:
                 # use image, but don't add it to the pool
                 selected.append(image)
             else:
                 # replace an existing image and use replaced image
-                ix = randint(0, len(pool))
+                ix = np.random.randint(0, len(pool))
                 selected.append(pool[ix])
                 pool[ix] = image
-        return asarray(selected)
+        return np.asarray(selected)
 
 
-    def train(self,epochs,batches,datasetA,datasetB):
+    def train(self,epochs,batches,datasetA,datasetB,save_path = ""):
         #discriminator output square shape
-        d_output_shape = self.discriminatorA.output_shape[1]
+        d_output_shape = self.discriminatorA.model.output_shape[1]
         data_pool_A,data_pool_B = list(),list()
         batch_per_epoch = int(len(datasetA)/batches)
         # calculate the number of training iterations
@@ -247,35 +271,92 @@ class cyclegan(object):
             X_fakeA = self.update_image_pool(data_pool_A, X_fakeA)
             X_fakeB = self.update_image_pool(data_pool_B, X_fakeB)
             # update generator B->A via adversarial and cycle loss
-            g_loss2, _, _, _, _ = self.composite_model_B.train_on_batch([X_realB, X_realA], [y_realA, X_realA, X_realB, X_realA])
+            g_loss2, cycle_loss_2, _,_ = self.composite_model_B.train_on_batch([X_realB, X_realA], [y_realA, X_realB, X_realA])
             # update discriminator for A -> [real/fake]
             dA_loss1 = self.discriminatorA.train_on_batch(X_realA, y_realA)
             dA_loss2 = self.discriminatorA.train_on_batch(X_fakeA, y_fakeA)
             dA_loss = (dA_loss1+dA_loss2)/2
             # update generator A->B via adversarial and cycle loss
-            g_loss1, _, _, _, _ = self.composite_model_A.train_on_batch([X_realA, X_realB], [y_realB, X_realB, X_realA, X_realB])
+            g_loss1, cycle_loss_1, _, _ = self.composite_model_A.train_on_batch([X_realA, X_realB], [y_realB, X_realA, X_realB])
             # update discriminator for B -> [real/fake]
             dB_loss1 = self.discriminatorB.train_on_batch(X_realB, y_realB)
             dB_loss2 = self.discriminatorB.train_on_batch(X_fakeB, y_fakeB)
             dB_loss = (dB_loss1+dB_loss2)/2
 
 
+
+            epoch_g_loss = epoch_g_loss+g_loss1+g_loss2+self.lamda*(cycle_loss_1+cycle_loss_2)
+            epoch_d_loss = epoch_d_loss+dA_loss+dB_loss
+
             if self.use_D_M:
+                X_real_mix_M,y_real_mix_M = self.generate_mix_sample_batch(datasetA,datasetB,batches,d_output_shape)
+
                 dAM_loss1 = self.discriminatorAandM.train_on_batch(X_real_mix_M, y_real_mix_M)
                 dAM_loss2 = self.discriminatorAandM.train_on_batch(X_fakeA, y_fakeA)
                 dAM_loss = (dAM_loss1+dAM_loss2)/2
                 dBM_loss1 = self.discriminatorBandM.train_on_batch(X_real_mix_M, y_real_mix_M)
                 dBM_loss2 = self.discriminatorBandM.train_on_batch(X_fakeB, y_fakeB)
                 dBM_loss = (dBM_loss1 + dBM_loss2) / 2
-
-            epoch_g_loss = epoch_g_loss
-            epoch_d_loss = epoch_d_loss+dA_loss+dB_loss
+                epoch_d_loss = epoch_d_loss +self.gamma*(dAM_loss+dBM_loss)
 
 
+            #save model
+            if (i+1)%batch_per_epoch == 0:
+                self.save_models((i+1)/batch_per_epoch,self.generatorAToB,self.generatorBToA,save_path)
         # summarize performance
 
+    # def load_models(self):
+    #
+    #
+    # def test(self):
+    #
+    # def generate_result(self,domain):
+
+def main():
+    directory_path_A = '../Input_Data_Small_Test/datasetA/npy/'
+    directory_path_B= '../Input_Data_Small_Test/datasetB/npy/'
+    datasetA = []
+    datasetB = []
+    file_types = ['npy']
+    file = '2000_Sabaton_Fist_For_Fight_01_Introduction_0001.npy'
+    edge = int((302-256)/2)
+    # print(np_vars.shape)
+    for files in os.listdir(directory_path_A):
+        path = os.path.join(directory_path_A,files)
+        data = np.load(path)
+        data = data.reshape(data.shape[::-1])
+        #shrink data to 256
+        data = data[edge:302-edge,:,:]
+        datasetA.append(data)
+    for files in os.listdir(directory_path_B):
+        path = os.path.join(directory_path_B,files)
+        data = np.load(path)
+        data = data.reshape(data.shape[::-1])
+        data = data[edge:302 - edge, :, :]
+        datasetB.append(data)
+    datasetA = np.array(datasetA)
+    datasetB = np.array(datasetB)
+    print(datasetA.shape)
+    print(datasetB.shape)
+
+    image_dim = datasetA[0].shape
+
+    Generator_A_to_B = Generator(input_dim=image_dim)
+    Generator_B_to_A = Generator(input_dim=image_dim)
+    Discriminator_B = Discriminator(input_dim=image_dim)
+    Discriminator_A = Discriminator(input_dim=image_dim)
+    # Discriminator_B_M = Discriminator(input_dim=image_dim)
+    # Discriminator_A_M = Discriminator(input_dim=image_dim)
+
+    batch_size = 8
 
 
-    def test(self):
 
-    def generate_result(self,domain):
+    # with tf.compat.v1.Session() as sess:
+    gan = CycleGan(None,batch_size,image_dim,Generator_A_to_B,Generator_B_to_A,Discriminator_A,Discriminator_B)
+    epoch = 5
+    path = "/save_model"
+    gan.train(epoch,batch_size,datasetA,datasetB,path)
+
+
+main()
