@@ -79,6 +79,7 @@ class Generator(object):
         self.model.save(path)
 
     def train_on_batch(self, X, y):
+        print("generator trainable weight",self.model.trainable_weights)
         return self.model.train_on_batch(X, y)
     def translate_domain(self,input_data):
         return self.model.predict(input_data)
@@ -110,6 +111,8 @@ class Discriminator(object):
         return self.model.predict(input_data)
 
     def train_on_batch(self,X,y):
+        print("discriminator trainable weight",len(self.model.trainable_weights))
+
         return self.model.train_on_batch(X,y)
 
 
@@ -271,16 +274,36 @@ class CycleGan(object):
             X_fakeA = self.update_image_pool(data_pool_A, X_fakeA)
             X_fakeB = self.update_image_pool(data_pool_B, X_fakeB)
             # update generator B->A via adversarial and cycle loss
+            # print("step : ",i)
+            # print("A->B trainable weight : ",len(self.generatorAToB.model.trainable_weights))
+            # print("B->A trainable weight : ",len(self.generatorBToA.model.trainable_weights))
+
             g_loss2, cycle_loss_2, _,_ = self.composite_model_B.train_on_batch([X_realB, X_realA], [y_realA, X_realB, X_realA])
+            self.generatorBToA.trainable(False)
+            self.generatorAToB.trainable(True)
+            # print("A->B trainable weight : ", len(self.generatorAToB.model.trainable_weights))
+            # print("B->A trainable weight : ", len(self.generatorBToA.model.trainable_weights))
             # update discriminator for A -> [real/fake]
+            self.discriminatorA.trainable(True)
             dA_loss1 = self.discriminatorA.train_on_batch(X_realA, y_realA)
             dA_loss2 = self.discriminatorA.train_on_batch(X_fakeA, y_fakeA)
+            self.discriminatorA.trainable(False)
+
             dA_loss = (dA_loss1+dA_loss2)/2
             # update generator A->B via adversarial and cycle loss
+            # print("A->B trainable weight : ", len(self.generatorAToB.model.trainable_weights))
+            # print("B->A trainable weight : ", len(self.generatorBToA.model.trainable_weights))
             g_loss1, cycle_loss_1, _, _ = self.composite_model_A.train_on_batch([X_realA, X_realB], [y_realB, X_realA, X_realB])
+            self.generatorBToA.trainable(True)
+            self.generatorAToB.trainable(False)
+            # print("A->B trainable weight : ", len(self.generatorAToB.model.trainable_weights))
+            # print("B->A trainable weight : ", len(self.generatorBToA.model.trainable_weights))
             # update discriminator for B -> [real/fake]
+            self.discriminatorB.trainable(True)
             dB_loss1 = self.discriminatorB.train_on_batch(X_realB, y_realB)
             dB_loss2 = self.discriminatorB.train_on_batch(X_fakeB, y_fakeB)
+            self.discriminatorB.trainable(False)
+
             dB_loss = (dB_loss1+dB_loss2)/2
 
 
@@ -354,7 +377,7 @@ def main():
 
     # with tf.compat.v1.Session() as sess:
     gan = CycleGan(None,batch_size,image_dim,Generator_A_to_B,Generator_B_to_A,Discriminator_A,Discriminator_B)
-    epoch = 5
+    epoch = 2
     path = "/save_model"
     gan.train(epoch,batch_size,datasetA,datasetB,path)
 
