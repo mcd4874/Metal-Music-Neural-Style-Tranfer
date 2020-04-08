@@ -78,6 +78,9 @@ class Generator(object):
     def save(self,path):
         self.model.save(path)
 
+    def load(self,path):
+        self.model = keras.models.load_model(path)
+
     def train_on_batch(self, X, y):
         print("generator trainable weight",self.model.trainable_weights)
         return self.model.train_on_batch(X, y)
@@ -107,11 +110,13 @@ class Discriminator(object):
 
     def save(self,path):
         self.model.save(path)
+    def load(self,path):
+        keras.models.load_model(path)
     def predict(self,input_data):
         return self.model.predict(input_data)
 
     def train_on_batch(self,X,y):
-        print("discriminator trainable weight",len(self.model.trainable_weights))
+        # print("discriminator trainable weight",len(self.model.trainable_weights))
 
         return self.model.train_on_batch(X,y)
 
@@ -211,6 +216,12 @@ class CycleGan(object):
         generator_model_BtoA.save(filename2)
         print('>Saved: %s and %s' % (filename1, filename2))
 
+    def load_models(self,path,filename1,filename2):
+        filename1 = os.path.join(path, filename1)
+        self.generatorAToB.load(filename1)
+        filename2 = os.path.join(path, filename2)
+        self.generatorBToA.load(filename2)
+
     # generate samples and save as a plot and save the model
     def summarize_performance(self,epochs, g_model, trainX, name, n_samples=5):
         # select a sample of input images
@@ -252,83 +263,135 @@ class CycleGan(object):
                 pool[ix] = image
         return np.asarray(selected)
 
+    def summarize(self, tag_value_pairs, step):
+        with self.writer.as_default():
+            for tag, value in tag_value_pairs:
+                tf.summary.scalar(tag, value, step=step)
+            self.writer.flush()
 
-    def train(self,epochs,batches,datasetA,datasetB,save_path = ""):
+    def train(self,epochs,batches,datasetA,datasetB,save_path = "",model_save_frequenly = 10):
+        summary_folder = "logs/scalars/"
+        self.writer = tf.summary.create_file_writer(summary_folder)
+
         #discriminator output square shape
         d_output_shape = self.discriminatorA.model.output_shape[1]
         data_pool_A,data_pool_B = list(),list()
-        batch_per_epoch = int(len(datasetA)/batches)
+        # batch_per_epoch = int(len(datasetA)/batches)
         # calculate the number of training iterations
-        n_steps = batch_per_epoch * epochs
+        n_steps = int(len(datasetA)/batches)
         # manually enumerate
-        epoch_g_loss = 0
-        epoch_d_loss = 0
-        for i in range(n_steps):
-            # select a batch of real samples
-            X_realA, y_realA = self.generate_real_samples_batch(datasetA, batches, d_output_shape)
-            X_realB, y_realB = self.generate_real_samples_batch(datasetB, batches, d_output_shape)
-            # generate a batch of fake samples
-            X_fakeA, y_fakeA = self.generate_fake_samples_batch(self.generatorBToA, X_realB, d_output_shape)
-            X_fakeB, y_fakeB = self.generate_fake_samples_batch(self.generatorAToB, X_realA, d_output_shape)
-            # update fakes from pool
-            X_fakeA = self.update_image_pool(data_pool_A, X_fakeA)
-            X_fakeB = self.update_image_pool(data_pool_B, X_fakeB)
-            # update generator B->A via adversarial and cycle loss
-            # print("step : ",i)
-            # print("A->B trainable weight : ",len(self.generatorAToB.model.trainable_weights))
-            # print("B->A trainable weight : ",len(self.generatorBToA.model.trainable_weights))
 
-            g_loss2, cycle_loss_2, _,_ = self.composite_model_B.train_on_batch([X_realB, X_realA], [y_realA, X_realB, X_realA])
-            self.generatorBToA.trainable(False)
-            self.generatorAToB.trainable(True)
-            # print("A->B trainable weight : ", len(self.generatorAToB.model.trainable_weights))
-            # print("B->A trainable weight : ", len(self.generatorBToA.model.trainable_weights))
-            # update discriminator for A -> [real/fake]
-            self.discriminatorA.trainable(True)
-            dA_loss1 = self.discriminatorA.train_on_batch(X_realA, y_realA)
-            dA_loss2 = self.discriminatorA.train_on_batch(X_fakeA, y_fakeA)
-            self.discriminatorA.trainable(False)
+        for e in range(epochs):
+            epoch_g_loss = 0
+            epoch_d_loss = 0
+            epoch_g_A_to_B_loss = 0
+            epoch_g_B_to_A_loss = 0
+            epoch_d_A__loss = 0
+            epoch_d_B__loss = 0
+            for i in range(n_steps):
+                # select a batch of real samples
+                X_realA, y_realA = self.generate_real_samples_batch(datasetA, batches, d_output_shape)
+                X_realB, y_realB = self.generate_real_samples_batch(datasetB, batches, d_output_shape)
+                # generate a batch of fake samples
+                X_fakeA, y_fakeA = self.generate_fake_samples_batch(self.generatorBToA, X_realB, d_output_shape)
+                X_fakeB, y_fakeB = self.generate_fake_samples_batch(self.generatorAToB, X_realA, d_output_shape)
+                # update fakes from pool
+                X_fakeA = self.update_image_pool(data_pool_A, X_fakeA)
+                X_fakeB = self.update_image_pool(data_pool_B, X_fakeB)
+                # update generator B->A via adversarial and cycle loss
+                # print("step : ",i)
+                # print("A->B trainable weight : ",len(self.generatorAToB.model.trainable_weights))
+                # print("B->A trainable weight : ",len(self.generatorBToA.model.trainable_weights))
 
-            dA_loss = (dA_loss1+dA_loss2)/2
-            # update generator A->B via adversarial and cycle loss
-            # print("A->B trainable weight : ", len(self.generatorAToB.model.trainable_weights))
-            # print("B->A trainable weight : ", len(self.generatorBToA.model.trainable_weights))
-            g_loss1, cycle_loss_1, _, _ = self.composite_model_A.train_on_batch([X_realA, X_realB], [y_realB, X_realA, X_realB])
-            self.generatorBToA.trainable(True)
-            self.generatorAToB.trainable(False)
-            # print("A->B trainable weight : ", len(self.generatorAToB.model.trainable_weights))
-            # print("B->A trainable weight : ", len(self.generatorBToA.model.trainable_weights))
-            # update discriminator for B -> [real/fake]
-            self.discriminatorB.trainable(True)
-            dB_loss1 = self.discriminatorB.train_on_batch(X_realB, y_realB)
-            dB_loss2 = self.discriminatorB.train_on_batch(X_fakeB, y_fakeB)
-            self.discriminatorB.trainable(False)
+                g_loss2, cycle_loss_2, _,_ = self.composite_model_B.train_on_batch([X_realB, X_realA], [y_realA, X_realB, X_realA])
+                self.generatorBToA.trainable(False)
+                self.generatorAToB.trainable(True)
+                # print("A->B trainable weight : ", len(self.generatorAToB.model.trainable_weights))
+                # print("B->A trainable weight : ", len(self.generatorBToA.model.trainable_weights))
+                # update discriminator for A -> [real/fake]
+                self.discriminatorA.trainable(True)
+                dA_loss1 = self.discriminatorA.train_on_batch(X_realA, y_realA)
+                dA_loss2 = self.discriminatorA.train_on_batch(X_fakeA, y_fakeA)
+                self.discriminatorA.trainable(False)
 
-            dB_loss = (dB_loss1+dB_loss2)/2
+                dA_loss = (dA_loss1+dA_loss2)/2
+                # update generator A->B via adversarial and cycle loss
+                # print("A->B trainable weight : ", len(self.generatorAToB.model.trainable_weights))
+                # print("B->A trainable weight : ", len(self.generatorBToA.model.trainable_weights))
+                g_loss1, cycle_loss_1, _, _ = self.composite_model_A.train_on_batch([X_realA, X_realB], [y_realB, X_realA, X_realB])
+                self.generatorBToA.trainable(True)
+                self.generatorAToB.trainable(False)
+                # print("A->B trainable weight : ", len(self.generatorAToB.model.trainable_weights))
+                # print("B->A trainable weight : ", len(self.generatorBToA.model.trainable_weights))
+                # update discriminator for B -> [real/fake]
+                self.discriminatorB.trainable(True)
+                dB_loss1 = self.discriminatorB.train_on_batch(X_realB, y_realB)
+                dB_loss2 = self.discriminatorB.train_on_batch(X_fakeB, y_fakeB)
+                self.discriminatorB.trainable(False)
 
+                dB_loss = (dB_loss1+dB_loss2)/2
 
+                epoch_g_A_to_B_loss += g_loss1
+                epoch_g_B_to_A_loss += g_loss2
+                epoch_d_A__loss += dA_loss
+                epoch_d_B__loss += dB_loss
+                epoch_g_loss = epoch_g_loss+g_loss1+g_loss2+self.lamda*(cycle_loss_1+cycle_loss_2)
+                epoch_d_loss = epoch_d_loss+dA_loss+dB_loss
 
-            epoch_g_loss = epoch_g_loss+g_loss1+g_loss2+self.lamda*(cycle_loss_1+cycle_loss_2)
-            epoch_d_loss = epoch_d_loss+dA_loss+dB_loss
+                if self.use_D_M:
+                    X_real_mix_M,y_real_mix_M = self.generate_mix_sample_batch(datasetA,datasetB,batches,d_output_shape)
 
-            if self.use_D_M:
-                X_real_mix_M,y_real_mix_M = self.generate_mix_sample_batch(datasetA,datasetB,batches,d_output_shape)
+                    dAM_loss1 = self.discriminatorAandM.train_on_batch(X_real_mix_M, y_real_mix_M)
+                    dAM_loss2 = self.discriminatorAandM.train_on_batch(X_fakeA, y_fakeA)
+                    dAM_loss = (dAM_loss1+dAM_loss2)/2
+                    dBM_loss1 = self.discriminatorBandM.train_on_batch(X_real_mix_M, y_real_mix_M)
+                    dBM_loss2 = self.discriminatorBandM.train_on_batch(X_fakeB, y_fakeB)
+                    dBM_loss = (dBM_loss1 + dBM_loss2) / 2
+                    epoch_d_loss = epoch_d_loss +self.gamma*(dAM_loss+dBM_loss)
 
-                dAM_loss1 = self.discriminatorAandM.train_on_batch(X_real_mix_M, y_real_mix_M)
-                dAM_loss2 = self.discriminatorAandM.train_on_batch(X_fakeA, y_fakeA)
-                dAM_loss = (dAM_loss1+dAM_loss2)/2
-                dBM_loss1 = self.discriminatorBandM.train_on_batch(X_real_mix_M, y_real_mix_M)
-                dBM_loss2 = self.discriminatorBandM.train_on_batch(X_fakeB, y_fakeB)
-                dBM_loss = (dBM_loss1 + dBM_loss2) / 2
-                epoch_d_loss = epoch_d_loss +self.gamma*(dAM_loss+dBM_loss)
 
 
             #save model
-            if (i+1)%batch_per_epoch == 0:
-                self.save_models((i+1)/batch_per_epoch,self.generatorAToB,self.generatorBToA,save_path)
-        # summarize performance
+            epoch_g_A_to_B_loss /= n_steps
+            epoch_g_B_to_A_loss /= n_steps
+            epoch_d_A__loss /= n_steps
+            epoch_d_B__loss /= n_steps
+            epoch_g_loss /= n_steps
+            epoch_d_loss /= n_steps
 
-    # def load_models(self):
+            print("at epoch : ",e)
+            print("generator loss : ",epoch_g_loss)
+            print("discriminator loss : ", epoch_g_loss)
+            list_tag_values = {
+                ("generatorA_to_B loss",epoch_g_A_to_B_loss),
+                ("generatorB_to_A loss",epoch_g_B_to_A_loss),
+                ("discriminator B loss", epoch_d_B__loss),
+                ("discriminator A loss", epoch_d_A__loss),
+                ("epoch discriminators loss", epoch_d_loss),
+                ("epoch generators loss", epoch_g_loss)
+            }
+            self.summarize(list_tag_values,e)
+            if (e)%model_save_frequenly == 0:
+                self.save_models(e,self.generatorAToB,self.generatorBToA,save_path)
+    def translate_A_to_B(self,inputs):
+        return self.generatorAToB.translate_domain(inputs)
+
+    def translate_B_to_A(self,inputs):
+        return self.generatorBToA.translate_domain(inputs)
+
+
+    # def load_models(self,path):
+    #     self.generatorAToB.load(path)
+    #     self.generatorBToA.load(path)
+    #     self.discriminatorA.load(path)
+    #     self.discriminatorB.load(path)
+    #
+    # def save_model(self,path):
+    #     self.generatorAToB.save(path)
+    #     self.generatorBToA.save(path)
+    #     self.discriminatorA.save(path)
+    #     self.discriminatorB.save(path)
+
     #
     #
     # def test(self):
@@ -371,15 +434,19 @@ def main():
     # Discriminator_B_M = Discriminator(input_dim=image_dim)
     # Discriminator_A_M = Discriminator(input_dim=image_dim)
 
-    batch_size = 8
+    batch_size = 32
 
 
 
     # with tf.compat.v1.Session() as sess:
     gan = CycleGan(None,batch_size,image_dim,Generator_A_to_B,Generator_B_to_A,Discriminator_A,Discriminator_B)
-    epoch = 2
+    epoch = 20
     path = "/save_model"
-    gan.train(epoch,batch_size,datasetA,datasetB,path)
+    save_model_frequenly = 5
+    gan.train(epoch,batch_size,datasetA,datasetB,path,save_model_frequenly)
+
+    #test the model
 
 
 main()
+
