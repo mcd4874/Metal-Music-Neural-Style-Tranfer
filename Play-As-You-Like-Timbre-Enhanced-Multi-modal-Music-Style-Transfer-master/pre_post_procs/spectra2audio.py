@@ -20,7 +20,7 @@ num_pieces = 5#None # output first k pieces of spectra, each last 3 seconds
 D_phase = None # without phase information, the util will do phase estimation
 
 ### directory & file names
-style_id = "02"
+style_id = "00"
 gen_dir = './test_gen_features_'+style_id
 ver_id = 'song1'
 
@@ -84,70 +84,82 @@ if source_wav is not None:
     # extract the phase information
     D_mag, D_phase = librosa.magphase(librosa.stft(y, n_fft=config['fft_size'], hop_length=config['hop_length']))
 
-for style in range(1):
-    #suffix_file_name = '*'+'_style_'+str(style).zfill(2)+'.npy'
-    #glob_files = spectra_dir #+ suffix_file_name
-    # gen_dir + ver_id + 'piece0000_style_00.npy'
-    #files = sorted(glob.glob(glob_files))
-    #num_files = len(files)
-    #print('{}: contains {} files'.format(glob_files, len(files)))
-    #if num_files==0:
-    #    continue
-    #if num_pieces == None: # then process all spectra
-    #    num_pieces = num_files
+def make_audio():
+    for style in range(1):
+        #suffix_file_name = '*'+'_style_'+str(style).zfill(2)+'.npy'
+        #glob_files = spectra_dir #+ suffix_file_name
+        # gen_dir + ver_id + 'piece0000_style_00.npy'
+        #files = sorted(glob.glob(glob_files))
+        #num_files = len(files)
+        #print('{}: contains {} files'.format(glob_files, len(files)))
+        #if num_files==0:
+        #    continue
+        #if num_pieces == None: # then process all spectra
+        #    num_pieces = num_files
 
-    num_pieces = len(os.listdir(spectra_dir))
-    
-    ret = np.zeros((hei, wid*num_pieces), dtype='float32') # concatenate the spectra
-    cnt = 0
-    for file in os.listdir(spectra_dir):
-        if cnt>=num_pieces:
-            break
-        
-        x = np.load(os.path.join(spectra_dir, file)) # x.dtype = 'float32'
-        if len(x.shape)==3:
-            print("Using only spectrogram")
-            # in latest codes,  x.shape should be [num_ch, 256. 256]
-            ret[:,cnt*256:(cnt+1)*256] = x[0] # only use spectrogram
+        num_pieces = len(os.listdir(spectra_dir))
+
+        ret = np.zeros((hei, wid*num_pieces), dtype='float32') # concatenate the spectra
+        cnt = 0
+        for file in os.listdir(spectra_dir):
+            if cnt>=num_pieces:
+                break
+
+            x = np.load(os.path.join(spectra_dir, file)) # x.dtype = 'float32'
+            if len(x.shape)==3:
+                print("Using only spectrogram")
+                # in latest codes,  x.shape should be [num_ch, 256. 256]
+                ret[:,cnt*256:(cnt+1)*256] = x[0] # only use spectrogram
+            else:
+                print("Using NOT only spectrogram")
+                # x.shape = [256, 256]
+                ret[:,cnt*256:(cnt+1)*256] = x
+            cnt += 1
+        print('shape of npy file: {}'.format(x.shape))
+        if not np.isfinite(ret).all():
+            print('Error !!!\nThe spectrogram is nan')
+
+        wav_name = outdir+'style_'+str(style).zfill(2)+'.wav'
+        print(wav_name)
+
+        png_name = wav_name[:-4]+'.png'
+        plt.figure(1, figsize=(7*3, 7/302*256*1))
+        plt.clf()
+        librosa.display.specshow(ret[:,:256*3], y_axis='mel', x_axis='time', hop_length=config['hop_length'])
+        plt.savefig(png_name, dpi='figure', bbox_inches='tight')
+
+        if (is_overwrite==False) and os.path.isfile(wav_name):
+            print('{} already exists'.format(wav_name))
+            continue
+
+        print('*'*5+'reconstructing magnitude'+'*'*5)
+
+        st = time.time()
+        mag = spectrum2magnitude(ret, config)
+        ed = time.time()
+        print('nnls average cost {} seconds for {} pieces'.format((ed-st)/num_pieces, num_pieces))
+        print(mag.shape, mag.dtype)
+        print('*'*5+'reconstructing waveform'+'*'*5)
+        audio = magnitude2waveform(mag, config, D_phase)
+        print(audio.shape, audio.dtype)
+        if not np.isfinite(audio).all():
+            print('Error !!!\nThe audio is nan')
+
+        if np.max(np.abs(audio)) > 0.0:
+            # normalize the output audio
+            norm_audio = audio/np.max(np.abs(audio))
         else:
-            print("Using NOT only spectrogram")
-            # x.shape = [256, 256]
-            ret[:,cnt*256:(cnt+1)*256] = x
-        cnt += 1
-    print('shape of npy file: {}'.format(x.shape))
-    if not np.isfinite(ret).all():
-        print('Error !!!\nThe spectrogram is nan')
-    
-    wav_name = outdir+'style_'+str(style).zfill(2)+'.wav'
-    print(wav_name)
-    
-    png_name = wav_name[:-4]+'.png'
-    plt.figure(1, figsize=(7*3, 7/302*256*1))
-    plt.clf()
-    librosa.display.specshow(ret[:,:256*3], y_axis='mel', x_axis='time', hop_length=config['hop_length'])
-    plt.savefig(png_name, dpi='figure', bbox_inches='tight')
-    
-    if (is_overwrite==False) and os.path.isfile(wav_name):
-        print('{} already exists'.format(wav_name))
-        continue
-    
-    print('*'*5+'reconstructing magnitude'+'*'*5)
-    
-    st = time.time()
-    mag = spectrum2magnitude(ret, config)
-    ed = time.time()
-    print('nnls average cost {} seconds for {} pieces'.format((ed-st)/num_pieces, num_pieces))
-    print(mag.shape, mag.dtype)
-    print('*'*5+'reconstructing waveform'+'*'*5)
-    audio = magnitude2waveform(mag, config, D_phase)
-    print(audio.shape, audio.dtype)
-    if not np.isfinite(audio).all():
-        print('Error !!!\nThe audio is nan')
+            norm_audio = audio
+            wav_name = wav_name[:-4]+'_notNorm.wav'
+        librosa.output.write_wav(wav_name, norm_audio, sr)
 
-    if np.max(np.abs(audio)) > 0.0:
-        # normalize the output audio
-        norm_audio = audio/np.max(np.abs(audio))
-    else:
-        norm_audio = audio
-        wav_name = wav_name[:-4]+'_notNorm.wav'
-    librosa.output.write_wav(wav_name, norm_audio, sr)
+for i in range(1,41):
+    style_id = "00"
+    gen_str = str(i*2500)
+    print("\n########################################################################")
+    print("###################### converting files for gen "+'0'*(8-len(gen_str))+gen_str)
+    print("########################################################################\n")
+    gen_dir = './test_out_April_14/example_'+'0'*(8-len(gen_str))+gen_str+'/a2b'
+    spectra_dir = gen_dir + '/'
+    outdir = './test_out_audio_April_14/gen_' + '0'*(8-len(gen_str))+gen_str+'/'
+    make_audio()
