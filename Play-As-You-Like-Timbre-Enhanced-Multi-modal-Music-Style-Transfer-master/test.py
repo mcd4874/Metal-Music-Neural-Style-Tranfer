@@ -93,6 +93,9 @@ if not os.path.exists(b2a_directory):
 
 # Start testing
 style_rand = Variable(torch.randn(opts.num_style, style_dim, 1, 1).cuda())
+opts.num_style = 1
+
+
 for j in range(opts.num_style):
     style_npy_var = style_rand[j].cpu().numpy()
     if opts.a2b == 1:
